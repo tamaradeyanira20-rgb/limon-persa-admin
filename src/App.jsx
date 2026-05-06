@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 
 const SUPABASE_URL = "https://ylwqubaxjsgfyrmkridc.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsd3F1YmF4anNnZnlybWtyaWRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5NDA2NzYsImV4cCI6MjA5MzUxNjY3Nn0.ENaQkWOjsuj9BDGEnn1MGOXheYddoiUM-3owF2dJ8qg";
-const ADMIN_PASSWORD = "admin2024limon"; // Cambia esto
+const ADMIN_PASSWORD = "admin2024limon";
 
 const sb = async (path, options = {}) => {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -184,17 +184,39 @@ const Deposits = () => {
 
   const update = async (dep, status) => {
     try {
+      // Paso 1: Actualizar estado del depósito
       await sb(`deposits?id=eq.${dep.id}`, { method: "PATCH", body: JSON.stringify({ status }), prefer: "return=minimal" });
+      alert("Paso 1 OK - Depósito marcado como: " + status);
+
       if (status === "confirmed") {
-        // Obtener el saldo ACTUAL del usuario directo desde la BD para evitar datos desactualizados
-        const freshUsers = await sb(`users?phone=eq.${dep.users.phone}&select=id,balance`);
+        // Paso 2: Ver qué trae dep.users
+        alert("Paso 2 - dep.users = " + JSON.stringify(dep.users));
+
+        // Paso 3: Buscar usuario fresco
+        const freshUsers = await sb(`users?phone=eq.${dep.users.phone}&select=id,balance,phone`);
+        alert("Paso 3 - Usuario fresco: " + JSON.stringify(freshUsers));
+
+        if (!freshUsers || freshUsers.length === 0) {
+          alert("ERROR: No se encontró el usuario con teléfono: " + dep.users.phone);
+          return;
+        }
+
         const freshUser = freshUsers[0];
-        if (!freshUser) throw new Error("Usuario no encontrado");
         const newBal = (freshUser.balance || 0) + dep.amount;
-        await sb(`users?id=eq.${freshUser.id}`, { method: "PATCH", body: JSON.stringify({ balance: newBal }), prefer: "return=minimal" });
+        alert(`Paso 4 - Balance actual: ${freshUser.balance}, Depósito: ${dep.amount}, Nuevo balance: ${newBal}`);
+
+        // Paso 5: Actualizar balance
+        const result = await sb(`users?id=eq.${freshUser.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ balance: newBal }),
+          prefer: "return=representation"
+        });
+        alert("Paso 5 OK - Respuesta de Supabase: " + JSON.stringify(result));
       }
       load();
-    } catch (e) { alert("Error: " + e.message); }
+    } catch (e) {
+      alert("ERROR: " + e.message);
+    }
   };
 
   return (
@@ -374,7 +396,6 @@ export default function App() {
     <>
       <G />
       <div style={{ minHeight: "100vh" }}>
-        {/* Header */}
         <div style={{ background: "var(--card)", borderBottom: "1px solid var(--border)", padding: "14px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 50 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{ fontSize: 22 }}>🍋</span>
@@ -383,7 +404,6 @@ export default function App() {
           <button onClick={() => setAuthed(false)} style={{ background: "none", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 12px", color: "var(--muted)", fontSize: 12, cursor: "pointer" }}>Salir</button>
         </div>
 
-        {/* Tabs */}
         <div style={{ background: "var(--card)", borderBottom: "1px solid var(--border)", padding: "0 24px", display: "flex", gap: 4, overflowX: "auto" }}>
           {tabs.map(t => (
             <button key={t.id} className={`tab-btn ${tab === t.id ? "tab-active" : "tab-inactive"}`} onClick={() => setTab(t.id)} style={{ padding: "12px 14px", whiteSpace: "nowrap", borderRadius: 0, borderBottom: tab === t.id ? "2px solid var(--lime)" : "2px solid transparent" }}>
@@ -392,7 +412,6 @@ export default function App() {
           ))}
         </div>
 
-        {/* Content */}
         <div style={{ padding: 24, maxWidth: 1200, margin: "0 auto" }} className="fade-up">
           {tab === "dashboard"   && <><Stats /><p style={{ color: "var(--muted)", fontSize: 13 }}>Bienvenido al panel de administración de Limón Persa.</p></>}
           {tab === "users"       && <Users />}
