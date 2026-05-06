@@ -186,8 +186,12 @@ const Deposits = () => {
     try {
       await sb(`deposits?id=eq.${dep.id}`, { method: "PATCH", body: JSON.stringify({ status }), prefer: "return=minimal" });
       if (status === "confirmed") {
-        const newBal = (dep.users?.balance || 0) + dep.amount;
-        await sb(`users?phone=eq.${dep.users.phone}`, { method: "PATCH", body: JSON.stringify({ balance: newBal }), prefer: "return=minimal" });
+        // Obtener el saldo ACTUAL del usuario directo desde la BD para evitar datos desactualizados
+        const freshUsers = await sb(`users?phone=eq.${dep.users.phone}&select=id,balance`);
+        const freshUser = freshUsers[0];
+        if (!freshUser) throw new Error("Usuario no encontrado");
+        const newBal = (freshUser.balance || 0) + dep.amount;
+        await sb(`users?id=eq.${freshUser.id}`, { method: "PATCH", body: JSON.stringify({ balance: newBal }), prefer: "return=minimal" });
       }
       load();
     } catch (e) { alert("Error: " + e.message); }
