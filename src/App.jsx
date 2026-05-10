@@ -280,6 +280,7 @@ const Users = () => {
 
 const Deposits = () => {
   const [deps, setDeps] = useState([]); const [loading, setLoading] = useState(true);
+  const [receipt, setReceipt] = useState(null);
   const load = useCallback(async () => { const d = await sb("deposits?order=created_at.desc&select=*,users(phone,balance)").catch(() => []); setDeps(d); setLoading(false); }, []);
   useEffect(() => { load(); }, [load]);
   const update = async (dep, status) => {
@@ -293,21 +294,44 @@ const Deposits = () => {
     <div>
       <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Depósitos</h3>
       {loading ? <div className="spinner" /> : (
-        <div className="card" style={{ overflowX: "auto" }}>
-          <table>
-            <thead><tr><th>Usuario</th><th>Monto</th><th>Fecha</th><th>Estado</th><th>Acciones</th></tr></thead>
-            <tbody>
-              {deps.map(d => (
-                <tr key={d.id}>
-                  <td style={{ fontWeight: 600 }}>{d.users?.phone}</td>
-                  <td style={{ color: "var(--lime)", fontWeight: 700 }}>{fmt(d.amount)}</td>
-                  <td style={{ color: "var(--muted)", fontSize: 12 }}>{new Date(d.created_at).toLocaleDateString("es-MX")}</td>
-                  <td><span className={`badge badge-${d.status}`}>{d.status === "pending" ? "Pendiente" : d.status === "confirmed" ? "Confirmado" : "Rechazado"}</span></td>
-                  <td>{d.status === "pending" && <div style={{ display: "flex", gap: 6 }}><button className="btn btn-success" onClick={() => update(d, "confirmed")}>✓ Confirmar</button><button className="btn btn-danger" onClick={() => update(d, "rejected")}>✗ Rechazar</button></div>}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {deps.map(d => (
+            <div key={d.id} className="card">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                <div>
+                  <p style={{ fontWeight: 700, fontSize: 16 }}>{d.users?.phone}</p>
+                  <p style={{ color: "var(--lime)", fontWeight: 800, fontSize: 20 }}>{fmt(d.amount)}</p>
+                  {d.concept && <p style={{ color: "var(--gold)", fontSize: 12, marginTop: 2 }}>Concepto: <b>{d.concept}</b></p>}
+                  <p style={{ color: "var(--muted)", fontSize: 12 }}>{new Date(d.created_at).toLocaleString("es-MX")}</p>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <span className={`badge badge-${d.status}`}>{d.status === "pending" ? "Pendiente" : d.status === "confirmed" ? "Confirmado" : "Rechazado"}</span>
+                  {d.receipt_url && (
+                    <button className="btn btn-blue" style={{ display: "block", marginTop: 8, fontSize: 11 }} onClick={() => setReceipt(d.receipt_url)}>
+                      🧾 Ver comprobante
+                    </button>
+                  )}
+                </div>
+              </div>
+              {d.status === "pending" && (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="btn btn-success" onClick={() => update(d, "confirmed")} style={{ flex: 1 }}>✓ Confirmar depósito</button>
+                  <button className="btn btn-danger" onClick={() => update(d, "rejected")} style={{ flex: 1 }}>✗ Rechazar</button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {receipt && (
+        <div className="modal-overlay" onClick={() => setReceipt(null)}>
+          <div style={{ background: "var(--card2)", borderRadius: 16, padding: 16, maxWidth: 500, width: "100%" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+              <p style={{ fontWeight: 700 }}>🧾 Comprobante</p>
+              <button onClick={() => setReceipt(null)} style={{ background: "none", border: "none", color: "var(--muted)", fontSize: 20, cursor: "pointer" }}>✕</button>
+            </div>
+            <img src={receipt} alt="comprobante" style={{ width: "100%", borderRadius: 10, maxHeight: 500, objectFit: "contain" }} />
+          </div>
         </div>
       )}
     </div>
