@@ -154,6 +154,9 @@ const Users = () => {
         const amt = Number(inputVal);
         if (isNaN(amt)) throw new Error("Monto inválido");
         await sb(`users?id=eq.${modal.user.id}`, { method: "PATCH", body: JSON.stringify({ balance: Number(modal.user.balance) + amt }), prefer: "return=minimal" });
+        if (amt > 0) {
+          await sb("earnings_history", { method: "POST", body: JSON.stringify({ user_id: modal.user.id, amount: amt, type: "manual", description: "Ajuste manual por administrador" }) }).catch(() => {});
+        }
         setMsg("✅ Saldo actualizado");
       } else if (modal.type === "password") {
         if (!inputVal || inputVal.length < 6) throw new Error("Mínimo 6 caracteres");
