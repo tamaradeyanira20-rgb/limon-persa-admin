@@ -501,14 +501,14 @@ const Products = () => {
   const load = useCallback(async () => { const d = await sb("products?order=id").catch(() => []); setProducts(d); setLoading(false); }, []);
   useEffect(() => { load(); }, [load]);
 
-  const openEdit = (p) => { setF({ name: p.name, price: p.price, daily_return: p.daily_return, description: p.description || "", image_url: p.image_url || "", duration_days: p.duration_days || 60 }); setModal({ mode: "edit", product: p }); setMsg(""); };
-  const openNew = () => { setF({ name: "", price: "", daily_return: "", description: "", image_url: "", duration_days: "60" }); setModal({ mode: "new" }); setMsg(""); };
+  const openEdit = (p) => { setF({ name: p.name, price: p.price, daily_return: p.daily_return, description: p.description || "", image_url: p.image_url || "", duration_days: p.duration_days || 60, max_purchases: p.max_purchases !== undefined ? p.max_purchases : 1 }); setModal({ mode: "edit", product: p }); setMsg(""); };
+  const openNew = () => { setF({ name: "", price: "", daily_return: "", description: "", image_url: "", duration_days: "60", max_purchases: "1" }); setModal({ mode: "new" }); setMsg(""); };
 
   const save = async () => {
     setSaving(true); setMsg("");
     try {
       if (!f.name || !f.price || !f.daily_return) throw new Error("Completa nombre, precio y rendimiento");
-      const body = { name: f.name, price: Number(f.price), daily_return: Number(f.daily_return), description: f.description, image_url: f.image_url, duration_days: Number(f.duration_days) || 60 };
+      const body = { name: f.name, price: Number(f.price), daily_return: Number(f.daily_return), description: f.description, image_url: f.image_url, duration_days: Number(f.duration_days) || 60, max_purchases: Number(f.max_purchases) };
       if (modal.mode === "edit") {
         await sb(`products?id=eq.${modal.product.id}`, { method: "PATCH", body: JSON.stringify(body), prefer: "return=minimal" });
         setMsg("✅ Producto actualizado");
@@ -538,6 +538,9 @@ const Products = () => {
               <p style={{ color: "var(--lime)", fontWeight: 700, fontSize: 14 }}>{fmt(p.price)}</p>
               <p style={{ color: "var(--gold)", fontSize: 12 }}>+{fmt(p.daily_return)}/día</p>
               <p style={{ color: "var(--muted)", fontSize: 11 }}>⏱ {p.duration_days || 60} días</p>
+              <p style={{ color: p.max_purchases === 0 ? "var(--danger)" : "var(--gold)", fontSize: 11 }}>
+                {p.max_purchases === 0 ? "🚫 Bloqueado" : `📌 Máx. ${p.max_purchases ?? 1} compra${(p.max_purchases ?? 1) !== 1 ? "s" : ""}`}
+              </p>
               <button className="btn btn-blue" style={{ marginTop: 10, width: "100%", fontSize: 12 }} onClick={() => openEdit(p)}>✏️ Editar</button>
             </div>
           ))}
@@ -551,6 +554,11 @@ const Products = () => {
             <div><label className="label">Precio (MXN)</label><input className="input-field" type="number" placeholder="Ej: 2500" value={f.price} onChange={e => setF(p => ({ ...p, price: e.target.value }))} /></div>
             <div><label className="label">Rendimiento diario (MXN)</label><input className="input-field" type="number" placeholder="Ej: 120" value={f.daily_return} onChange={e => setF(p => ({ ...p, daily_return: e.target.value }))} /></div>
             <div><label className="label">Duración (días)</label><input className="input-field" type="number" placeholder="Ej: 60" value={f.duration_days} onChange={e => setF(p => ({ ...p, duration_days: e.target.value }))} /></div>
+            <div>
+              <label className="label">Límite de compras por usuario</label>
+              <input className="input-field" type="number" min={0} placeholder="0=bloqueado, 1=una vez, 2=dos veces..." value={f.max_purchases} onChange={e => setF(p => ({ ...p, max_purchases: e.target.value }))} />
+              <p style={{ color: "var(--muted)", fontSize: 11, marginTop: 4 }}>0 = nadie puede comprar · 1 = solo una vez · 2 o más = múltiples compras</p>
+            </div>
             <div><label className="label">Descripción (opcional)</label><input className="input-field" placeholder="Descripción corta" value={f.description} onChange={e => setF(p => ({ ...p, description: e.target.value }))} /></div>
             <ImageUpload value={f.image_url} onChange={url => setF(p => ({ ...p, image_url: url }))} />
             {msg && <p style={{ color: msg.startsWith("✅") ? "var(--lime)" : "var(--danger)", fontSize: 13 }}>{msg}</p>}
