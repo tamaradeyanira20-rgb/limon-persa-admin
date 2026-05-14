@@ -348,7 +348,11 @@ const Withdrawals = () => {
   const update = async (wd, status) => {
     try {
       await sb(`withdrawals?id=eq.${wd.id}`, { method: "PATCH", body: JSON.stringify({ status }), prefer: "return=minimal" });
-      if (status === "paid") await sb(`users?phone=eq.${wd.users.phone}`, { method: "PATCH", body: JSON.stringify({ balance: Math.max(0, (wd.users?.balance || 0) - wd.amount) }), prefer: "return=minimal" });
+      // Si se rechaza, devolver el saldo al usuario
+      if (status === "rejected") {
+        await sb(`users?phone=eq.${wd.users.phone}`, { method: "PATCH", body: JSON.stringify({ balance: (wd.users?.balance || 0) + wd.amount }), prefer: "return=minimal" });
+      }
+      // Si se paga, no se descuenta nada (ya fue descontado al solicitar)
       load();
     } catch (e) { alert("Error: " + e.message); }
   };
