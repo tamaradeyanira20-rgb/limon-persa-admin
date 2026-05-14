@@ -128,10 +128,21 @@ const Stats = () => {
 
 const Users = () => {
   const [users, setUsers] = useState([]); const [loading, setLoading] = useState(true); const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all"); // all | with | without
   const [modal, setModal] = useState(null); const [inputVal, setInputVal] = useState(""); const [saving, setSaving] = useState(false); const [msg, setMsg] = useState("");
   const [detailUser, setDetailUser] = useState(null); const [userProducts, setUserProducts] = useState([]); const [userRefs, setUserRefs] = useState([]); const [loadingDetail, setLoadingDetail] = useState(false);
+  const [userPurchaseMap, setUserPurchaseMap] = useState({});
 
-  const load = useCallback(async () => { const d = await sb("users?order=created_at.desc&select=*").catch(() => []); setUsers(d); setLoading(false); }, []);
+  const load = useCallback(async () => {
+    const d = await sb("users?order=created_at.desc&select=*").catch(() => []);
+    setUsers(d);
+    // Cargar qué usuarios tienen compras activas
+    const purchases = await sb("purchases?is_active=eq.true&select=user_id").catch(() => []);
+    const map = {};
+    (purchases || []).forEach(p => { map[p.user_id] = true; });
+    setUserPurchaseMap(map);
+    setLoading(false);
+  }, []);
   useEffect(() => { load(); }, [load]);
 
   const openDetail = async (user) => {
@@ -174,13 +185,34 @@ const Users = () => {
     setSaving(false);
   };
 
-  const filtered = users.filter(u => u.phone?.includes(search));
+  const filtered = users
+    .filter(u => u.phone?.includes(search))
+    .filter(u => filter === "all" ? true : filter === "with" ? userPurchaseMap[u.id] : !userPurchaseMap[u.id]);
+
+  const withCount = users.filter(u => userPurchaseMap[u.id]).length;
+  const withoutCount = users.filter(u => !userPurchaseMap[u.id]).length;
 
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h3 style={{ fontSize: 18, fontWeight: 700 }}>Usuarios ({users.length})</h3>
         <input className="input-field" placeholder="Buscar teléfono..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: 180, padding: "8px 12px", fontSize: 13 }} />
+      </div>
+
+      {/* Filtros */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        {[
+          { id: "all",     label: `Todos (${users.length})`,          color: "var(--lime)" },
+          { id: "with",    label: `Con productos (${withCount})`,      color: "var(--gold)" },
+          { id: "without", label: `Sin productos (${withoutCount})`,   color: "var(--muted)" },
+        ].map(f => (
+          <button key={f.id} onClick={() => setFilter(f.id)} style={{
+            padding: "7px 14px", border: `1.5px solid ${filter === f.id ? f.color : "var(--border)"}`,
+            borderRadius: 10, background: filter === f.id ? f.color + "22" : "var(--card)",
+            color: filter === f.id ? f.color : "var(--muted)", fontWeight: 700, fontSize: 12,
+            fontFamily: "Syne", cursor: "pointer", transition: "all .2s"
+          }}>{f.label}</button>
+        ))}
       </div>
       {loading ? <div className="spinner" /> : (
         <div className="card" style={{ overflowX: "auto" }}>
@@ -189,7 +221,7 @@ const Users = () => {
             <tbody>
               {filtered.map(u => (
                 <tr key={u.id}>
-                  <td style={{ fontWeight: 600 }}>{u.phone}</td>
+                  <td style={{ fontWeight: 600 }}>{u.phone} {userPurchaseMap[u.id] ? <span style={{ background: "rgba(190,242,100,.15)", color: "var(--lime)", fontSize: 10, padding: "2px 6px", borderRadius: 6, marginLeft: 4 }}>✓ Activo</span> : <span style={{ background: "rgba(100,100,100,.15)", color: "var(--muted)", fontSize: 10, padding: "2px 6px", borderRadius: 6, marginLeft: 4 }}>Sin compra</span>}</td>
                   <td style={{ color: "var(--lime)" }}>{fmt(u.balance)}</td>
                   <td><span style={{ background: "rgba(190,242,100,.1)", color: "var(--lime)", padding: "2px 8px", borderRadius: 6, fontSize: 12 }}>🎰 {u.spins || 0}</span></td>
                   <td style={{ color: "var(--muted)", fontSize: 12 }}>{u.referral_code}</td>
