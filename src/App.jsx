@@ -316,48 +316,91 @@ const Users = () => {
 const Deposits = () => {
   const [deps, setDeps] = useState([]); const [loading, setLoading] = useState(true);
   const [receipt, setReceipt] = useState(null);
-  const load = useCallback(async () => { const d = await sb("deposits?order=created_at.desc&select=*,users(phone,balance)").catch(() => []); setDeps(d); setLoading(false); }, []);
+  const [filter, setFilter] = useState("pending"); // pending | all
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 10;
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const query = filter === "pending"
+      ? "deposits?status=eq.pending&order=created_at.desc&select=*,users(phone,balance)"
+      : `deposits?order=created_at.desc&limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}&select=*,users(phone,balance)`;
+    const d = await sb(query).catch(() => []);
+    setDeps(d);
+    setLoading(false);
+  }, [filter, page]);
+
   useEffect(() => { load(); }, [load]);
+
   const update = async (dep, status) => {
     try {
       await sb(`deposits?id=eq.${dep.id}`, { method: "PATCH", body: JSON.stringify({ status }), prefer: "return=minimal" });
-      if (status === "confirmed") await sb(`users?phone=eq.${dep.users.phone}`, { method: "PATCH", body: JSON.stringify({ balance: (dep.users?.balance || 0) + dep.amount }), prefer: "return=minimal" });
-      load();
+      if (status === "confirmed") {
+        await sb(`users?phone=eq.${dep.users.phone}`, { method: "PATCH", body: JSON.stringify({ balance: (dep.users?.balance || 0) + dep.amount }), prefer: "return=minimal" });
+      }
+      // Actualizar localmente sin recargar todo
+      setDeps(prev => prev.map(d => d.id === dep.id ? { ...d, status } : d));
     } catch (e) { alert("Error: " + e.message); }
   };
+
   return (
     <div>
-      <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Depósitos</h3>
-      {loading ? <div className="spinner" /> : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {deps.map(d => (
-            <div key={d.id} className="card">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                <div>
-                  <p style={{ fontWeight: 700, fontSize: 16 }}>{d.users?.phone}</p>
-                  <p style={{ color: "var(--lime)", fontWeight: 800, fontSize: 20 }}>{fmt(d.amount)}</p>
-                  {d.concept && <p style={{ color: "var(--gold)", fontSize: 12, marginTop: 2 }}>Concepto: <b>{d.concept}</b></p>}
-                  <p style={{ color: "var(--muted)", fontSize: 12 }}>{new Date(d.created_at).toLocaleString("es-MX")}</p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <h3 style={{ fontSize: 18, fontWeight: 700 }}>Depósitos</h3>
+        <button className="btn btn-blue" onClick={load} style={{ fontSize: 12, padding: "6px 12px" }}>🔄 Actualizar</button>
+      </div>
+
+      {/* Filtros */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        {[{ id: "pending", label: "⏳ Pendientes" }, { id: "all", label: "📋 Todos" }].map(f => (
+          <button key={f.id} onClick={() => { setFilter(f.id); setPage(0); }} style={{
+            padding: "7px 14px", border: `1.5px solid ${filter === f.id ? "var(--lime)" : "var(--border)"}`,
+            borderRadius: 10, background: filter === f.id ? "rgba(190,242,100,.15)" : "var(--card)",
+            color: filter === f.id ? "var(--lime)" : "var(--muted)", fontWeight: 700, fontSize: 12,
+            fontFamily: "Syne", cursor: "pointer"
+          }}>{f.label}</button>
+        ))}
+      </div>
+
+      {loading ? <div style={{ textAlign: "center", padding: 40 }}><div className="spinner" /></div> : (
+        <>
+          {deps.length === 0 && <p style={{ color: "var(--muted)", textAlign: "center", padding: 32 }}>No hay depósitos {filter === "pending" ? "pendientes" : ""}</p>}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {deps.map(d => (
+              <div key={d.id} className="card" style={{ borderLeft: `3px solid ${d.status === "pending" ? "var(--gold)" : d.status === "confirmed" ? "var(--lime)" : "var(--danger)"}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                  <div>
+                    <p style={{ fontWeight: 700, fontSize: 15 }}>{d.users?.phone}</p>
+                    <p style={{ color: "var(--lime)", fontWeight: 800, fontSize: 22 }}>{fmt(d.amount)}</p>
+                    {d.concept && <p style={{ color: "var(--gold)", fontSize: 12 }}>Concepto: <b>{d.concept}</b></p>}
+                    <p style={{ color: "var(--muted)", fontSize: 11 }}>{new Date(d.created_at).toLocaleString("es-MX")}</p>
+                  </div>
+                  <div style={{ textAlign: "right", display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+                    <span className={`badge badge-${d.status}`}>{d.status === "pending" ? "⏳ Pendiente" : d.status === "confirmed" ? "✅ Confirmado" : "❌ Rechazado"}</span>
+                    {d.receipt_url && <button className="btn btn-blue" style={{ fontSize: 11, padding: "4px 10px" }} onClick={() => setReceipt(d.receipt_url)}>🧾 Comprobante</button>}
+                  </div>
                 </div>
-                <div style={{ textAlign: "right" }}>
-                  <span className={`badge badge-${d.status}`}>{d.status === "pending" ? "Pendiente" : d.status === "confirmed" ? "Confirmado" : "Rechazado"}</span>
-                  {d.receipt_url && (
-                    <button className="btn btn-blue" style={{ display: "block", marginTop: 8, fontSize: 11 }} onClick={() => setReceipt(d.receipt_url)}>
-                      🧾 Ver comprobante
-                    </button>
-                  )}
-                </div>
+                {d.status === "pending" && (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button className="btn btn-success" onClick={() => update(d, "confirmed")} style={{ flex: 1, padding: "10px 0" }}>✓ Confirmar depósito</button>
+                    <button className="btn btn-danger" onClick={() => update(d, "rejected")} style={{ flex: 1, padding: "10px 0" }}>✗ Rechazar</button>
+                  </div>
+                )}
               </div>
-              {d.status === "pending" && (
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button className="btn btn-success" onClick={() => update(d, "confirmed")} style={{ flex: 1 }}>✓ Confirmar depósito</button>
-                  <button className="btn btn-danger" onClick={() => update(d, "rejected")} style={{ flex: 1 }}>✗ Rechazar</button>
-                </div>
-              )}
+            ))}
+          </div>
+
+          {/* Paginación solo en modo "todos" */}
+          {filter === "all" && (
+            <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "center" }}>
+              <button className="btn" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} style={{ background: "var(--card)", color: "var(--muted)", padding: "8px 16px" }}>← Anterior</button>
+              <span style={{ color: "var(--muted)", fontSize: 13, padding: "8px 12px" }}>Página {page + 1}</span>
+              <button className="btn" onClick={() => setPage(p => p + 1)} disabled={deps.length < PAGE_SIZE} style={{ background: "var(--card)", color: "var(--muted)", padding: "8px 16px" }}>Siguiente →</button>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
+
       {receipt && (
         <div className="modal-overlay" onClick={() => setReceipt(null)}>
           <div style={{ background: "var(--card2)", borderRadius: 16, padding: 16, maxWidth: 500, width: "100%" }}>
