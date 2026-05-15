@@ -126,6 +126,120 @@ const Stats = () => {
   );
 };
 
+
+// ─── DETALLE DE MOVIMIENTOS POR USUARIO ──────────────────────
+const EarningsDetail = ({ userId }) => {
+  const [earnings, setEarnings] = useState([]);
+  const [deposits, setDeposits] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    if (!show) return;
+    Promise.all([
+      sb(`earnings_history?user_id=eq.${userId}&order=created_at.desc&limit=50`).catch(() => []),
+      sb(`deposits?user_id=eq.${userId}&status=eq.confirmed&order=created_at.desc`).catch(() => []),
+    ]).then(([e, d]) => {
+      setEarnings(e || []);
+      setDeposits(d || []);
+      setLoading(false);
+    });
+  }, [userId, show]);
+
+  const typeIcon = { yield: "📦", vip: "👑", referral: "👥", manual: "💰", wheel: "🎰" };
+  const typeColor = { yield: "var(--lime)", vip: "var(--gold)", referral: "var(--blue)", manual: "var(--purple)", wheel: "#f472b6" };
+
+  // Totales por tipo
+  const totals = {};
+  earnings.forEach(e => {
+    if (!totals[e.type]) totals[e.type] = 0;
+    totals[e.type] += Number(e.amount);
+  });
+  const totalDeposits = deposits.reduce((s, d) => s + Number(d.amount), 0);
+  const totalEarnings = earnings.reduce((s, e) => s + Number(e.amount), 0);
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <button onClick={() => setShow(!show)} style={{ background: "rgba(96,165,250,.1)", border: "1px solid rgba(96,165,250,.3)", borderRadius: 10, padding: "10px 14px", color: "var(--blue)", fontWeight: 700, fontSize: 13, cursor: "pointer", width: "100%", textAlign: "left" }}>
+        {show ? "▼" : "▶"} 💼 Ver movimientos de saldo
+      </button>
+
+      {show && (
+        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+          {loading ? <div className="spinner" style={{ margin: "10px auto" }} /> : (
+            <>
+              {/* Resumen */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div className="card" style={{ padding: "10px 14px", borderTop: "2px solid var(--lime)" }}>
+                  <p style={{ color: "var(--muted)", fontSize: 11 }}>Total ganancias</p>
+                  <p style={{ color: "var(--lime)", fontWeight: 800, fontSize: 16 }}>{fmt(totalEarnings)}</p>
+                </div>
+                <div className="card" style={{ padding: "10px 14px", borderTop: "2px solid var(--blue)" }}>
+                  <p style={{ color: "var(--muted)", fontSize: 11 }}>Total depósitos</p>
+                  <p style={{ color: "var(--blue)", fontWeight: 800, fontSize: 16 }}>{fmt(totalDeposits)}</p>
+                </div>
+              </div>
+
+              {/* Totales por tipo */}
+              {Object.keys(totals).length > 0 && (
+                <div className="card" style={{ padding: "12px 14px" }}>
+                  <p style={{ fontWeight: 700, marginBottom: 10, fontSize: 13 }}>Desglose de ganancias</p>
+                  {Object.entries(totals).map(([type, amount]) => (
+                    <div key={type} style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                      <span style={{ fontSize: 13 }}>{typeIcon[type] || "💰"} {type === "yield" ? "Rendimientos" : type === "vip" ? "Bonos VIP" : type === "referral" ? "Comisiones referido" : type === "manual" ? "Ajuste manual" : "Ruleta"}</span>
+                      <span style={{ color: typeColor[type] || "var(--lime)", fontWeight: 700 }}>{fmt(amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Depósitos confirmados */}
+              {deposits.length > 0 && (
+                <div>
+                  <p style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: "var(--blue)" }}>💳 Depósitos confirmados</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {deposits.map(d => (
+                      <div key={d.id} className="card" style={{ padding: "8px 12px", display: "flex", justifyContent: "space-between" }}>
+                        <div>
+                          <p style={{ fontSize: 13, fontWeight: 600, color: "var(--blue)" }}>{fmt(d.amount)}</p>
+                          {d.concept && <p style={{ color: "var(--muted)", fontSize: 11 }}>Concepto: {d.concept}</p>}
+                        </div>
+                        <p style={{ color: "var(--muted)", fontSize: 11 }}>{new Date(d.created_at).toLocaleDateString("es-MX")}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Historial detallado */}
+              {earnings.length > 0 && (
+                <div>
+                  <p style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: "var(--lime)" }}>📋 Historial detallado</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 300, overflowY: "auto" }}>
+                    {earnings.map(e => (
+                      <div key={e.id} className="card" style={{ padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", borderLeft: `3px solid ${typeColor[e.type] || "var(--lime)"}` }}>
+                        <div>
+                          <p style={{ fontSize: 12 }}>{typeIcon[e.type] || "💰"} {e.description}</p>
+                          <p style={{ color: "var(--muted)", fontSize: 11 }}>{new Date(e.created_at).toLocaleString("es-MX")}</p>
+                        </div>
+                        <p style={{ color: typeColor[e.type] || "var(--lime)", fontWeight: 700, fontSize: 14 }}>+{fmt(e.amount)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {earnings.length === 0 && deposits.length === 0 && (
+                <p style={{ color: "var(--muted)", fontSize: 13, textAlign: "center", padding: 12 }}>Sin movimientos registrados</p>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const Users = () => {
   const [users, setUsers] = useState([]); const [loading, setLoading] = useState(true); const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all"); // all | with | without
@@ -265,6 +379,9 @@ const Users = () => {
                   <div key={k} className="card" style={{ padding: "10px 14px" }}><p style={{ color: "var(--muted)", fontSize: 11 }}>{k}</p><p style={{ fontWeight: 700, color: "var(--lime)", fontSize: 15 }}>{v}</p></div>
                 ))}
               </div>
+              {/* Historial de movimientos */}
+              <EarningsDetail userId={detailUser.id} />
+
               <div>
                 <p style={{ fontWeight: 700, marginBottom: 10, fontSize: 14 }}>📦 Productos ({userProducts.length})</p>
                 {userProducts.length === 0 ? <p style={{ color: "var(--muted)", fontSize: 13 }}>No ha comprado ningún paquete</p> : (
