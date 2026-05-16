@@ -776,6 +776,171 @@ const Settings = () => {
   );
 };
 
+
+// ─── VIP OVERVIEW ADMIN ───────────────────────────────────────
+const VipOverview = () => {
+  const [users, setUsers] = useState([]);
+  const [vipLevels, setVipLevels] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [expandedUser, setExpandedUser] = useState(null);
+  const [userRefs, setUserRefs] = useState({});
+
+  useEffect(() => {
+    const load = async () => {
+      const [u, v] = await Promise.all([
+        sb("users?order=vip_level.desc,created_at.desc&select=*").catch(() => []),
+        sb("vip_levels?order=level").catch(() => []),
+      ]);
+      setUsers(u || []);
+      setVipLevels(v || []);
+      setLoading(false);
+    };
+    load();
+  }, []);
+
+  const loadUserRefs = async (user) => {
+    if (userRefs[user.id]) { setExpandedUser(expandedUser === user.id ? null : user.id); return; }
+    const refs = await sb(`users?referred_by=eq.${user.id}&select=id,phone,created_at`).catch(() => []);
+    // Check which refs have qualifying purchases
+    const qualified = [];
+    for (const r of (refs || [])) {
+      const purchases = await sb(`purchases?user_id=eq.${r.id}&is_active=eq.true&select=products(price)`).catch(() => []);
+      const ok = (purchases || []).some(p => p.products && Number(p.products.price) >= 200);
+      qualified.push({ ...r, qualified: ok });
+    }
+    setUserRefs(prev => ({ ...prev, [user.id]: qualified }));
+    setExpandedUser(user.id);
+  };
+
+  const getQualifiedCount = (user) => {
+    const refs = userRefs[user.id] || [];
+    const claimedLevel = user.vip_level || 0;
+    if (claimedLevel < 5) {
+      return refs.filter(r => r.qualified).length;
+    } else {
+      const vipReachedAt = user.vip_reached_at ? new Date(user.vip_reached_at) : null;
+      if (!vipReachedAt) return 0;
+      return refs.filter(r => r.qualified && new Date(r.created_at) > vipReachedAt).length;
+    }
+  };
+
+  const getNextVip = (user) => {
+    const claimedLevel = user.vip_level || 0;
+    return vipLevels.find(v => v.level > claimedLevel);
+  };
+
+  const VIP_COLORS = ["#a3e635","#facc15","#34d399","#60a5fa","#f472b6","#fb923c","#a78bfa","#f87171","#2dd4bf","#fbbf24"];
+  const VIP_ICONS = ["🌱","⭐","💎","🔥","👑","🚀","💫","🏆","🌟","👑"];
+
+  const filtered = users.filter(u => u.phone?.includes(search));
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <h3 style={{ fontSize: 18, fontWeight: 700 }}>👑 Progreso VIP</h3>
+        <input className="input-field" placeholder="Buscar teléfono..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: 180, padding: "8px 12px", fontSize: 13 }} />
+      </div>
+
+      {/* Resumen por nivel */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, marginBottom: 20 }}>
+        {[0, ...vipLevels.map(v => v.level)].map(lvl => {
+          const count = users.filter(u => (u.vip_level || 0) === lvl).length;
+          const color = lvl === 0 ? "var(--muted)" : VIP_COLORS[(lvl - 1) % VIP_COLORS.length];
+          return (
+            <div key={lvl} className="card" style={{ padding: "10px 8px", textAlign: "center", borderTop: `2px solid ${color}` }}>
+              <p style={{ fontSize: 16 }}>{lvl === 0 ? "👤" : VIP_ICONS[(lvl - 1) % VIP_ICONS.length]}</p>
+              <p style={{ fontWeight: 800, fontSize: 18, color }}>{count}</p>
+              <p style={{ color: "var(--muted)", fontSize: 10 }}>{lvl === 0 ? "Sin VIP" : `VIP ${lvl}`}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      {loading ? <div className="spinner" /> : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {filtered.map(u => {
+            const claimedLevel = u.vip_level || 0;
+            const nextVip = getNextVip(u);
+            const color = claimedLevel === 0 ? "var(--muted)" : VIP_COLORS[(claimedLevel - 1) % VIP_COLORS.length];
+            const icon = claimedLevel === 0 ? "👤" : VIP_ICONS[(claimedLevel - 1) % VIP_ICONS.length];
+            const isExpanded = expandedUser === u.id;
+            const refs = userRefs[u.id];
+            const qualifiedCount = refs ? getQualifiedCount(u) : null;
+
+            return (
+              <div key={u.id} className="card" style={{ borderLeft: `3px solid ${color}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 20 }}>{icon}</span>
+                    <div>
+                      <p style={{ fontWeight: 700 }}>{u.phone}</p>
+                      <p style={{ color, fontSize: 12, fontWeight: 700 }}>{claimedLevel === 0 ? "Sin VIP" : `VIP ${claimedLevel}`}</p>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    {nextVip && (
+                      <p style={{ color: "var(--muted)", fontSize: 12 }}>
+                        Siguiente: <b style={{ color: "var(--gold)" }}>VIP {nextVip.level}</b>
+                      </p>
+                    )}
+                    <button className="btn btn-blue" style={{ fontSize: 11, padding: "5px 10px", marginTop: 4 }} onClick={() => loadUserRefs(u)}>
+                      {isExpanded ? "▲ Ocultar" : "▼ Ver referidos"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Barra de progreso al siguiente nivel */}
+                {nextVip && refs && (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                      <span style={{ color: "var(--muted)", fontSize: 12 }}>
+                        {qualifiedCount} / {nextVip.required_refs} referidos calificados
+                        {claimedLevel >= 5 && <span style={{ color: "var(--gold)", fontSize: 10, marginLeft: 6 }}>(nuevos desde VIP 5)</span>}
+                      </span>
+                      <span style={{ color: "var(--lime)", fontSize: 12, fontWeight: 700 }}>
+                        Faltan {Math.max(0, nextVip.required_refs - qualifiedCount)}
+                      </span>
+                    </div>
+                    <div style={{ background: "var(--bg)", borderRadius: 6, height: 8, overflow: "hidden" }}>
+                      <div style={{ height: "100%", borderRadius: 6, background: `linear-gradient(90deg, ${color}, #bef264)`, width: `${Math.min(100, (qualifiedCount / nextVip.required_refs) * 100)}%`, transition: "width 1s ease" }} />
+                    </div>
+                  </div>
+                )}
+
+                {/* Lista de referidos */}
+                {isExpanded && refs && (
+                  <div style={{ marginTop: 12, borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+                    <p style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>
+                      👥 Referidos de {u.phone} ({refs.length} total · {refs.filter(r => r.qualified).length} calificados)
+                    </p>
+                    {refs.length === 0
+                      ? <p style={{ color: "var(--muted)", fontSize: 13 }}>No ha referido a nadie</p>
+                      : <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 200, overflowY: "auto" }}>
+                          {refs.map(r => (
+                            <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", background: "var(--bg)", borderRadius: 8, borderLeft: `3px solid ${r.qualified ? "var(--lime)" : "var(--muted)"}` }}>
+                              <div>
+                                <p style={{ fontSize: 13, fontWeight: 600 }}>{r.phone}</p>
+                                <p style={{ color: "var(--muted)", fontSize: 11 }}>{new Date(r.created_at).toLocaleDateString("es-MX")}</p>
+                              </div>
+                              <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 10, background: r.qualified ? "rgba(190,242,100,.15)" : "rgba(100,100,100,.15)", color: r.qualified ? "var(--lime)" : "var(--muted)" }}>
+                                {r.qualified ? "✓ Calificado" : "Sin compra ≥$200"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                    }
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const WheelConfig = () => {
   const [prizes, setPrizes] = useState([]); const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(null);
   const load = useCallback(async () => { const d = await sb("wheel_prizes?order=id").catch(() => []); setPrizes(d); setLoading(false); }, []);
@@ -841,6 +1006,7 @@ export default function App() {
     { id: "deposits",    label: "💳 Depósitos" },
     { id: "withdrawals", label: "💸 Retiros" },
     { id: "products",    label: "📦 Productos" },
+    { id: "vip",         label: "👑 VIP" },
     { id: "settings",    label: "⚙️ Configuración" },
     { id: "wheel",       label: "🎰 Ruleta" },
     { id: "spins",       label: "📋 Giros" },
@@ -863,6 +1029,7 @@ export default function App() {
           {tab === "withdrawals" && <Withdrawals />}
           {tab === "products"    && <Products />}
           {tab === "settings"    && <Settings />}
+          {tab === "vip"         && <VipOverview />}
           {tab === "wheel"       && <WheelConfig />}
           {tab === "spins"       && <SpinHistory />}
         </div>
