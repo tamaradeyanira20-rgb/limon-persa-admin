@@ -563,7 +563,10 @@ const Withdrawals = () => {
                   <td style={{ fontSize: 12 }}>{w.bank_name}</td>
                   <td style={{ fontSize: 12, fontFamily: "monospace", color: "var(--muted)" }}>{w.clabe}</td>
                   <td style={{ fontSize: 12 }}>{w.account_holder}</td>
-                  <td><span className={`badge badge-${w.status}`}>{w.status === "pending" ? "Pendiente" : w.status === "paid" ? "Pagado" : "Rechazado"}</span></td>
+                  <td>
+                    <span className={`badge badge-${w.status}`}>{w.status === "pending" ? "Pendiente" : w.status === "paid" ? "Pagado" : "Rechazado"}</span>
+                    <p style={{ color: "var(--muted)", fontSize: 11, marginTop: 4 }}>{new Date(w.created_at).toLocaleString("es-MX", { timeZone: "America/Mexico_City", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+                  </td>
                   <td>{w.status === "pending" && <div style={{ display: "flex", gap: 6 }}><button className="btn btn-success" onClick={() => update(w, "paid")}>✓ Pagar</button><button className="btn btn-danger" onClick={() => update(w, "rejected")}>✗ Rechazar</button></div>}</td>
                 </tr>
               ))}
