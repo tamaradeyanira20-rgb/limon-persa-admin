@@ -137,7 +137,7 @@ const EarningsDetail = ({ userId }) => {
   useEffect(() => {
     if (!show) return;
     Promise.all([
-      sb(`earnings_history?user_id=eq.${userId}&order=created_at.desc&limit=50`).catch(() => []),
+      sb(`earnings_history?user_id=eq.${userId}&order=created_at.desc&limit=500`).catch(() => []),
       sb(`deposits?user_id=eq.${userId}&status=eq.confirmed&order=created_at.desc`).catch(() => []),
     ]).then(([e, d]) => {
       setEarnings(e || []);
