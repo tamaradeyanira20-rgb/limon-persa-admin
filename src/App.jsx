@@ -290,9 +290,10 @@ const Users = () => {
         setMsg("✅ Contraseña cambiada");
       } else if (modal.type === "spins") {
         const amt = Number(inputVal);
-        if (isNaN(amt) || amt < 1) throw new Error("Cantidad inválida");
-        await sb(`users?id=eq.${modal.user.id}`, { method: "PATCH", body: JSON.stringify({ spins: (modal.user.spins || 0) + amt }), prefer: "return=minimal" });
-        setMsg("✅ Giros agregados");
+        if (isNaN(amt) || amt === 0) throw new Error("Cantidad inválida");
+        const newSpins = Math.max(0, (modal.user.spins || 0) + amt);
+        await sb(`users?id=eq.${modal.user.id}`, { method: "PATCH", body: JSON.stringify({ spins: newSpins }), prefer: "return=minimal" });
+        setMsg(amt > 0 ? `✅ Giros agregados (total: ${newSpins})` : `✅ Giros quitados (total: ${newSpins})`);
       }
       load();
     } catch (e) { setMsg("❌ " + e.message); }
@@ -360,7 +361,18 @@ const Users = () => {
           <div className="gap">
             {modal.type === "balance" && <><p style={{ color: "var(--muted)", fontSize: 13 }}>Saldo actual: <b style={{ color: "var(--lime)" }}>{fmt(modal.user.balance)}</b></p><div><label className="label">Monto (negativo para restar)</label><input className="input-field" type="number" placeholder="Ej: 500 o -200" value={inputVal} onChange={e => setInputVal(e.target.value)} /></div></>}
             {modal.type === "password" && <div><label className="label">Nueva contraseña</label><input className="input-field" type="password" placeholder="Mínimo 6 caracteres" value={inputVal} onChange={e => setInputVal(e.target.value)} /></div>}
-            {modal.type === "spins" && <><p style={{ color: "var(--muted)", fontSize: 13 }}>Giros actuales: <b style={{ color: "var(--lime)" }}>{modal.user.spins || 0}</b></p><div><label className="label">Giros a agregar</label><input className="input-field" type="number" min={1} placeholder="Ej: 1" value={inputVal} onChange={e => setInputVal(e.target.value)} /></div></>}
+            {modal.type === "spins" && (
+              <>
+                <p style={{ color: "var(--muted)", fontSize: 13 }}>Giros actuales: <b style={{ color: "var(--lime)" }}>{modal.user.spins || 0}</b></p>
+                <div>
+                  <label className="label">Cantidad (negativo para quitar)</label>
+                  <input className="input-field" type="number" placeholder="Ej: 2 para agregar, -1 para quitar" value={inputVal} onChange={e => setInputVal(e.target.value)} />
+                </div>
+                {inputVal && <p style={{ fontSize: 12, color: Number(inputVal) < 0 ? "var(--danger)" : "var(--lime)" }}>
+                  Resultado: {Math.max(0, (modal.user.spins || 0) + Number(inputVal))} giros
+                </p>}
+              </>
+            )}
             {msg && <p style={{ color: msg.startsWith("✅") ? "var(--lime)" : "var(--danger)", fontSize: 13 }}>{msg}</p>}
             <div style={{ display: "flex", gap: 8 }}>
               <button className="btn btn-lime" onClick={handleSave} disabled={saving} style={{ flex: 1 }}>{saving ? "..." : "Guardar"}</button>
