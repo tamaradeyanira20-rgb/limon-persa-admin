@@ -131,6 +131,7 @@ const Stats = () => {
 const EarningsDetail = ({ userId }) => {
   const [earnings, setEarnings] = useState([]);
   const [deposits, setDeposits] = useState([]);
+  const [withdrawals, setWithdrawals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [show, setShow] = useState(false);
 
@@ -139,9 +140,11 @@ const EarningsDetail = ({ userId }) => {
     Promise.all([
       sb(`earnings_history?user_id=eq.${userId}&order=created_at.desc&limit=500`).catch(() => []),
       sb(`deposits?user_id=eq.${userId}&status=eq.confirmed&order=created_at.desc`).catch(() => []),
-    ]).then(([e, d]) => {
+      sb(`withdrawals?user_id=eq.${userId}&order=created_at.desc`).catch(() => []),
+    ]).then(([e, d, w]) => {
       setEarnings(e || []);
       setDeposits(d || []);
+      setWithdrawals(w || []);
       setLoading(false);
     });
   }, [userId, show]);
@@ -157,6 +160,7 @@ const EarningsDetail = ({ userId }) => {
   });
   const totalDeposits = deposits.reduce((s, d) => s + Number(d.amount), 0);
   const totalEarnings = earnings.reduce((s, e) => s + Number(e.amount), 0);
+  const totalWithdrawals = withdrawals.reduce((s, w) => s + Number(w.amount), 0);
 
   return (
     <div style={{ marginBottom: 16 }}>
@@ -169,14 +173,18 @@ const EarningsDetail = ({ userId }) => {
           {loading ? <div className="spinner" style={{ margin: "10px auto" }} /> : (
             <>
               {/* Resumen */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                 <div className="card" style={{ padding: "10px 14px", borderTop: "2px solid var(--lime)" }}>
-                  <p style={{ color: "var(--muted)", fontSize: 11 }}>Total ganancias</p>
-                  <p style={{ color: "var(--lime)", fontWeight: 800, fontSize: 16 }}>{fmt(totalEarnings)}</p>
+                  <p style={{ color: "var(--muted)", fontSize: 11 }}>Ganancias</p>
+                  <p style={{ color: "var(--lime)", fontWeight: 800, fontSize: 15 }}>{fmt(totalEarnings)}</p>
                 </div>
                 <div className="card" style={{ padding: "10px 14px", borderTop: "2px solid var(--blue)" }}>
-                  <p style={{ color: "var(--muted)", fontSize: 11 }}>Total depósitos</p>
-                  <p style={{ color: "var(--blue)", fontWeight: 800, fontSize: 16 }}>{fmt(totalDeposits)}</p>
+                  <p style={{ color: "var(--muted)", fontSize: 11 }}>Depósitos</p>
+                  <p style={{ color: "var(--blue)", fontWeight: 800, fontSize: 15 }}>{fmt(totalDeposits)}</p>
+                </div>
+                <div className="card" style={{ padding: "10px 14px", borderTop: "2px solid var(--danger)" }}>
+                  <p style={{ color: "var(--muted)", fontSize: 11 }}>Retiros</p>
+                  <p style={{ color: "var(--danger)", fontWeight: 800, fontSize: 15 }}>{fmt(totalWithdrawals)}</p>
                 </div>
               </div>
 
@@ -205,6 +213,28 @@ const EarningsDetail = ({ userId }) => {
                           {d.concept && <p style={{ color: "var(--muted)", fontSize: 11 }}>Concepto: {d.concept}</p>}
                         </div>
                         <p style={{ color: "var(--muted)", fontSize: 11 }}>{new Date(d.created_at).toLocaleDateString("es-MX")}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Retiros */}
+              {withdrawals.length > 0 && (
+                <div>
+                  <p style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: "var(--danger)" }}>💸 Retiros solicitados</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {withdrawals.map(w => (
+                      <div key={w.id} className="card" style={{ padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", borderLeft: `3px solid ${w.status === "paid" ? "var(--lime)" : w.status === "rejected" ? "var(--danger)" : "var(--gold)"}` }}>
+                        <div>
+                          <p style={{ fontSize: 13, fontWeight: 600, color: "var(--danger)" }}>-{fmt(w.amount)}</p>
+                          <p style={{ color: "var(--muted)", fontSize: 11 }}>{w.bank_name} · {w.account_holder}</p>
+                          <p style={{ color: "var(--muted)", fontSize: 11, fontFamily: "monospace" }}>{w.clabe}</p>
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <span className={`badge badge-${w.status}`} style={{ fontSize: 10 }}>{w.status === "pending" ? "⏳ Pendiente" : w.status === "paid" ? "✅ Pagado" : "❌ Rechazado"}</span>
+                          <p style={{ color: "var(--muted)", fontSize: 11, marginTop: 4 }}>{new Date(w.created_at).toLocaleString("es-MX", { timeZone: "America/Mexico_City" })}</p>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -399,16 +429,30 @@ const Users = () => {
                 {userProducts.length === 0 ? <p style={{ color: "var(--muted)", fontSize: 13 }}>No ha comprado ningún paquete</p> : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {userProducts.map(p => (
-                      <div key={p.id} className="card" style={{ padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <div>
-                          <p style={{ fontWeight: 600 }}>{p.products?.name}</p>
-                          <p style={{ color: "var(--muted)", fontSize: 11 }}>Comprado: {new Date(p.purchased_at).toLocaleDateString("es-MX")}</p>
-                          {p.expires_at && <p style={{ color: "var(--gold)", fontSize: 11 }}>Vence: {new Date(p.expires_at).toLocaleDateString("es-MX")}</p>}
+                      <div key={p.id} className="card" style={{ padding: "10px 14px", borderLeft: `3px solid ${p.is_active ? "var(--lime)" : "var(--muted)"}` }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                          <div>
+                            <p style={{ fontWeight: 600 }}>{p.products?.name}</p>
+                            <p style={{ color: "var(--muted)", fontSize: 11 }}>Comprado: {new Date(p.purchased_at).toLocaleDateString("es-MX")}</p>
+                            {p.expires_at && <p style={{ color: "var(--gold)", fontSize: 11 }}>Vence: {new Date(p.expires_at).toLocaleDateString("es-MX")}</p>}
+                          </div>
+                          <div style={{ textAlign: "right" }}>
+                            <p style={{ color: "var(--lime)", fontWeight: 700 }}>{fmt(p.products?.price)}</p>
+                            <span className={`badge badge-${p.is_active ? "active" : "inactive"}`}>{p.is_active ? "Activo" : "Inactivo"}</span>
+                          </div>
                         </div>
-                        <div style={{ textAlign: "right" }}>
-                          <p style={{ color: "var(--lime)", fontWeight: 700 }}>{fmt(p.products?.price)}</p>
-                          <span className={`badge badge-${p.is_active ? "active" : "inactive"}`}>{p.is_active ? "Activo" : "Inactivo"}</span>
-                        </div>
+                        {p.is_active && (
+                          <button className="btn btn-danger" style={{ marginTop: 8, width: "100%", fontSize: 12 }}
+                            onClick={async () => {
+                              if (!window.confirm(`¿Cancelar el paquete "${p.products?.name}" de este usuario?`)) return;
+                              try {
+                                await sb(`purchases?id=eq.${p.id}`, { method: "PATCH", body: JSON.stringify({ is_active: false }), prefer: "return=minimal" });
+                                setUserProducts(prev => prev.map(x => x.id === p.id ? { ...x, is_active: false } : x));
+                              } catch(e) { alert("Error: " + e.message); }
+                            }}>
+                            🚫 Cancelar paquete
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
