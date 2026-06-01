@@ -433,7 +433,7 @@ const Users = () => {
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                           <div>
                             <p style={{ fontWeight: 600 }}>{p.products?.name}</p>
-                            <p style={{ color: "var(--muted)", fontSize: 11 }}>Comprado: {new Date(p.purchased_at).toLocaleDateString("es-MX")}</p>
+                            <p style={{ color: "var(--muted)", fontSize: 11 }}>Comprado: {new Date(p.purchased_at).toLocaleString("es-MX", { timeZone: "America/Mexico_City", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
                             {p.expires_at && <p style={{ color: "var(--gold)", fontSize: 11 }}>Vence: {new Date(p.expires_at).toLocaleDateString("es-MX")}</p>}
                           </div>
                           <div style={{ textAlign: "right" }}>
